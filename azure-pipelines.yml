@@ -1,0 +1,112 @@
+trigger:
+  branches:
+    include:
+      - main  # Adjust based on your default branch
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureResourceGroup: 'fastrackcloud-rg'
+  azureLocation: 'eastus2'
+  containerAppName: 'fastrackcloud-app'
+  containerRegistry: 'docker.io'
+  dockerImageName: 'fastrackcloud/website-automation'
+  dockerImageTag: 'latest'
+  containerPort: 80
+  httpsPort: 443
+  containerInstanceCount: 2
+  certbotEmail: 'admin@fastrackcloud.com'
+  domain1: 'www.fastrackcloud.com'
+  domain2: 'fastrackcloud.com'
+
+stages:
+  - stage: Build
+    displayName: "Build and Push Docker Image"
+    jobs:
+      - job: BuildDockerImage
+        displayName: "Build and Push Docker Image to DockerHub"
+        steps:
+          - task: Docker@2
+            displayName: "Log in to DockerHub"
+            inputs:
+              command: login
+              containerRegistry: dockerhub-creds  # Service connection to DockerHub
+
+          - task: Docker@2
+            displayName: "Build Docker Image"
+            inputs:
+              command: build
+              dockerfile: "$(Build.SourcesDirectory)/Dockerfile"
+              buildContext: "$(Build.SourcesDirectory)"
+              repository: "$(dockerImageName)"
+              tags: "$(dockerImageTag)"
+
+          - task: Docker@2
+            displayName: "Push Docker Image to DockerHub"
+            inputs:
+              command: push
+              repository: "$(dockerImageName)"
+              tags: "$(dockerImageTag)"
+
+  - stage: Deploy
+    displayName: "Deploy to Azure Container Apps"
+    dependsOn: Build
+    jobs:
+      - job: DeployToAzure
+        displayName: "Deploy Containers to Azure"
+        steps:
+          - task: AzureCLI@2
+            displayName: "Log in to Azure"
+            inputs:
+              azureSubscription: "azure-creds"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                echo "Creating Resource Group if not exists..."
+                az group create --name $(azureResourceGroup) --location $(azureLocation)
+
+                echo "Deploying Azure Container App..."
+                az containerapp create \
+                  --name $(containerAppName) \
+                  --resource-group $(azureResourceGroup) \
+                  --image $(containerRegistry)/$(dockerImageName):$(dockerImageTag) \
+                  --target-port $(containerPort) \
+                  --ingress external \
+                  --scale-rules https \
+                  --min-replicas $(containerInstanceCount) \
+                  --max-replicas $(containerInstanceCount)
+
+  - stage: ConfigureSSL
+    displayName: "Configure SSL with Certbot"
+    dependsOn: Deploy
+    jobs:
+      - job: EnableSSL
+        displayName: "Run Certbot Inside the Container"
+        steps:
+          - task: AzureCLI@2
+            displayName: "Execute Certbot in Running Container"
+            inputs:
+              azureSubscription: "azure-creds"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                echo "Fetching Container App FQDN..."
+                appFQDN=$(az containerapp show \
+                --name $(containerAppName) \
+                --resource-group $(azureResourceGroup) \
+                --query properties.configuration.ingress.fqdn \
+                -o tsv
+                echo "Container App is accessible at: $appFQDN"
+
+                echo "Running Certbot to Obtain SSL Certificate..."
+                az containerapp exec \
+                  --name $(containerAppName) \
+                  --resource-group $(azureResourceGroup) \
+                  --command "certbot --apache -n --agree-tos --email $(certbotEmail) -d $(domain1) -d $(domain2)"
+
+                echo "Setting up Auto-Renewal..."
+                az containerapp exec \
+                  --name $(containerAppName) \
+                  --resource-group $(azureResourceGroup) \
+                  --command "echo '0 0 */60 * * certbot renew --quiet' | crontab -"
