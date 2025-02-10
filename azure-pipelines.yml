@@ -73,7 +73,8 @@ stages:
                   --image $(containerRegistry)/$(dockerImageName):$(dockerImageTag) \
                   --target-port $(containerPort) \
                   --ingress external \
-                  --scale-rules https \
+                  --target-port 80 \
+                  --target-port 443 \
                   --min-replicas $(containerInstanceCount) \
                   --max-replicas $(containerInstanceCount)
 
