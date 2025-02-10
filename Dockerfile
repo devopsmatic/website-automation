@@ -2,9 +2,11 @@ FROM ubuntu:latest
 
 # Install required packages
 RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
     apache2 \
     php \
-    git \
+    git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -26,4 +28,3 @@ EXPOSE 80 443
 
 # Start Apache in the foreground
 CMD ["apachectl", "-D", "FOREGROUND"]
- 
