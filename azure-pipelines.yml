@@ -58,6 +58,23 @@ stages:
         displayName: "Deploy Containers to Azure"
         steps:
           - task: AzureCLI@2
+            displayName: "Create Azure Resource Group (if not exists)"
+            inputs:
+              azureSubscription: "azure-creds"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                echo "Checking if Azure Resource Group exists..."
+                rgExists=$(az group exists --name $(azureResourceGroup))
+
+                if [ "$rgExists" = "false" ]; then
+                  echo "Resource Group does not exist. Creating..."
+                  az group create --name $(azureResourceGroup) --location $(azureLocation)
+                else
+                  echo "Resource Group already exists."
+                fi
+
+          - task: AzureCLI@2
             displayName: "Create Container Apps Environment (if not exists)"
             inputs:
               azureSubscription: "azure-creds"
