@@ -70,6 +70,7 @@ stages:
                 az containerapp create \
                   --name $(containerAppName) \
                   --resource-group $(azureResourceGroup) \
+                  --environment $(containerAppEnvironment) \
                   --image $(containerRegistry)/$(dockerImageName):$(dockerImageTag) \
                   --target-port $(containerPort) \
                   --ingress external \
