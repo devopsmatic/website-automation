@@ -11,6 +11,7 @@ variables:
   azureLocation: 'eastus2'
   containerAppName: 'fastrackcloud-app'
   containerRegistry: 'docker.io'
+  containerAppEnvironment: 'fastrackcloud-env'
   dockerImageName: 'cloudops06/website-automation'
   dockerImageTag: 'latest'
   containerPort: 80
