@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
 RUN a2enmod ssl rewrite
 
 # Clone the repository
-RUN git clone https://github.com/fastrackcloud/website-automation.git /website-automation
+RUN git clone https://github.com/fastrackcloud/website-automation.git/website-automation
 
 # Copy website files to the Apache web root
 RUN cp -r /website-automation/* /var/www/html/ && \
