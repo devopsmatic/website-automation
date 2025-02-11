@@ -12,7 +12,7 @@ variables:
   containerAppName: 'fastrackcloud-app'
   containerAppEnvironment: 'fastrackcloud-env'
   containerRegistry: 'docker.io'
-  dockerImageName: 'fastrackcloud/website-automation'
+  dockerImageName: 'cloudops06/website-automation'
   dockerImageTag: 'latest'
   containerPort: 80
   httpsPort: 443
