@@ -1,7 +1,7 @@
 trigger:
   branches:
     include:
-      - main  # Adjust based on your default branch
+      - main  # Adjust this if your main branch is different
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -10,9 +10,9 @@ variables:
   azureResourceGroup: 'fastrackcloud-rg'
   azureLocation: 'eastus2'
   containerAppName: 'fastrackcloud-app'
-  containerRegistry: 'docker.io'
   containerAppEnvironment: 'fastrackcloud-env'
-  dockerImageName: 'cloudops06/website-automation'
+  containerRegistry: 'docker.io'
+  dockerImageName: 'fastrackcloud/website-automation'
   dockerImageTag: 'latest'
   containerPort: 80
   httpsPort: 443
@@ -32,7 +32,7 @@ stages:
             displayName: "Log in to DockerHub"
             inputs:
               command: login
-              containerRegistry: dockerhub-creds  # Service connection to DockerHub
+              containerRegistry: dockerhub-creds  # Ensure this matches your service connection name
 
           - task: Docker@2
             displayName: "Build Docker Image"
@@ -58,22 +58,38 @@ stages:
         displayName: "Deploy Containers to Azure"
         steps:
           - task: AzureCLI@2
-            displayName: "Log in to Azure"
+            displayName: "Create Container Apps Environment (if not exists)"
             inputs:
               azureSubscription: "azure-creds"
               scriptType: "bash"
               scriptLocation: "inlineScript"
               inlineScript: |
-                echo "Creating Resource Group if not exists..."
-                az group create --name $(azureResourceGroup) --location $(azureLocation)
+                echo "Checking if Azure Container Apps Environment exists..."
+                envExists=$(az containerapp env list --resource-group $(azureResourceGroup) --query "[?name=='$(containerAppEnvironment)'].name" -o tsv)
 
+                if [ -z "$envExists" ]; then
+                  echo "Environment does not exist. Creating..."
+                  az containerapp env create \
+                    --name $(containerAppEnvironment) \
+                    --resource-group $(azureResourceGroup) \
+                    --location $(azureLocation)
+                else
+                  echo "Environment already exists."
+                fi
+
+          - task: AzureCLI@2
+            displayName: "Deploy Azure Container App"
+            inputs:
+              azureSubscription: "azure-creds"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
                 echo "Deploying Azure Container App..."
                 az containerapp create \
                   --name $(containerAppName) \
                   --resource-group $(azureResourceGroup) \
                   --environment $(containerAppEnvironment) \
                   --image $(containerRegistry)/$(dockerImageName):$(dockerImageTag) \
-                  --target-port $(containerPort) \
                   --ingress external \
                   --target-port 80 \
                   --target-port 443 \
@@ -95,20 +111,17 @@ stages:
               scriptLocation: "inlineScript"
               inlineScript: |
                 echo "Fetching Container App FQDN..."
-                appFQDN=$(az containerapp show \
-                --name $(containerAppName) \
-                --resource-group $(azureResourceGroup) \
-                --query properties.configuration.ingress.fqdn \
-                -o tsv
+                appFQDN=$(az containerapp show --name $(containerAppName) --resource-group $(azureResourceGroup) --query properties.configuration.ingress.fqdn -o tsv)
                 echo "Container App is accessible at: $appFQDN"
 
                 echo "Running Certbot to Obtain SSL Certificate..."
                 az containerapp exec \
                   --name $(containerAppName) \
                   --resource-group $(azureResourceGroup) \
-                  --command "certbot --apache -n --agree-tos --email $(certbotEmail) -d $(domain1) -d $(domain2)"
+                  --command "certbot --apache -n --agree-tos --email $(certbotEmail) \
+                    -d $(domain1) -d $(domain2) --redirect"
 
-                echo "Setting up Auto-Renewal..."
+                echo "Setting up Auto-Renewal Every 60 Days..."
                 az containerapp exec \
                   --name $(containerAppName) \
                   --resource-group $(azureResourceGroup) \
