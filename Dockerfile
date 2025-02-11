@@ -1,3 +1,6 @@
+# Use Ubuntu as the base image
+FROM ubuntu:latest
+
 # Install required packages
 RUN apt-get update && apt-get install -y \
     curl \
@@ -13,8 +16,10 @@ RUN apt-get update && apt-get install -y \
 # Enable Apache SSL module and rewrite module
 RUN a2enmod ssl rewrite
 
-# Copy website files to the Apache web root
+# Clone the repository
 RUN git clone https://github.com/fastrackcloud/website-automation.git /website-automation
+
+# Copy website files to the Apache web root
 RUN cp -r /website-automation/* /var/www/html/ && \
     mv /var/www/html/htaccess /var/www/html/.htaccess
 
