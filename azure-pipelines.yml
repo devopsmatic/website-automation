@@ -12,7 +12,7 @@ variables:
   containerAppName: 'fastrackcloud-app'
   containerAppEnvironment: 'fastrackcloud-env'
   containerRegistry: 'docker.io'
-  dockerImageName: 'cloudops06/website-automation'
+  dockerImageName: 'fastrackcloud/website-automation'
   dockerImageTag: 'latest'
   containerPort: 80
   httpsPort: 443
@@ -104,25 +104,24 @@ stages:
         displayName: "Run Certbot Inside the Container"
         steps:
           - task: AzureCLI@2
-            displayName: "Execute Certbot in Running Container"
+            displayName: "Trigger Certbot Execution in the Container"
             inputs:
               azureSubscription: "azure-creds"
               scriptType: "bash"
               scriptLocation: "inlineScript"
               inlineScript: |
-                echo "Fetching Container App FQDN..."
-                appFQDN=$(az containerapp show --name $(containerAppName) --resource-group $(azureResourceGroup) --query properties.configuration.ingress.fqdn -o tsv)
-                echo "Container App is accessible at: $appFQDN"
-
-                echo "Running Certbot to Obtain SSL Certificate..."
-                az containerapp exec \
+                echo "Enabling Certbot execution inside the container..."
+                
+                az containerapp update \
                   --name $(containerAppName) \
                   --resource-group $(azureResourceGroup) \
-                  --command "certbot --apache -n --agree-tos --email $(certbotEmail) \
-                    -d $(domain1) -d $(domain2) --redirect"
+                  --set-env-vars "RUN_CERTBOT=true"
+
+                echo "Waiting for Certbot to complete..."
+                sleep 60  # Wait for Certbot execution inside the container
 
                 echo "Setting up Auto-Renewal Every 60 Days..."
-                az containerapp exec \
+                az containerapp update \
                   --name $(containerAppName) \
                   --resource-group $(azureResourceGroup) \
-                  --command "echo '0 0 */60 * * certbot renew --quiet' | crontab -"
+                  --set-env-vars "CERTBOT_RENEWAL=true"
